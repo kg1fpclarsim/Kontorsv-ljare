@@ -22,8 +22,8 @@
   <script>
     let csvData = [];
 
-    // HÄR anger du länken till din CSV på GitHub (raw-format!)
-    const csvUrl = "Schenker kontor.csv";
+    // HÄR: byt till din riktiga raw-länk från GitHub
+    const csvUrl = "https://raw.githubusercontent.com/<DITT_GITHUB_ANVÄNDARNAMN>/<DITT_REPO>/main/Schenker%20kontor.csv";
 
     // Hämta CSV från GitHub
     fetch(csvUrl)
@@ -33,38 +33,41 @@
         document.getElementById('result').textContent = "Fel vid laddning av CSV: " + err;
       });
 
-    // Enkel CSV-parser
+    // Parser som klarar både ; och ,
     function parseCSV(text) {
-      const rows = text.split(/\r?\n/).map(r => r.split(";"));
-      const headers = rows[0];
+      const delimiter = text.includes(";") ? ";" : ",";
+      const rows = text.split(/\r?\n/).map(r => r.split(delimiter));
+      const headers = rows[0].map(h => h.trim());
       const postnummerIndex = headers.indexOf("Postnummer");
       const postortIndex = headers.indexOf("Postort");
       const kontorIndex = headers.indexOf("Kontor");
 
       csvData = rows.slice(1).map(row => ({
-        postnummer: row[postnummerIndex],
-        postort: row[postortIndex],
-        kontor: row[kontorIndex]
+        postnummer: row[postnummerIndex] ? row[postnummerIndex].trim() : "",
+        postort: row[postortIndex] ? row[postortIndex].trim() : "",
+        kontor: row[kontorIndex] ? row[kontorIndex].trim() : ""
       }));
 
       document.getElementById('result').textContent = "CSV laddad. Ange postnummer eller ort ovan.";
     }
 
-    // Söker i data
+    // Söker i data (tillåter delsträngar och ignorerar mellanslag i postnummer)
     function search() {
-      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const query = document.getElementById('searchInput').value.trim().toLowerCase().replace(/\s+/g, "");
+
       if (!query) {
         document.getElementById('result').textContent = "Ange ett postnummer eller ort.";
         return;
       }
 
-      const matches = csvData.filter(row =>
-        (row.postnummer && row.postnummer.toLowerCase() === query) ||
-        (row.postort && row.postort.toLowerCase() === query)
-      );
+      const matches = csvData.filter(row => {
+        const pn = row.postnummer.toLowerCase().replace(/\s+/g, "");
+        const po = row.postort.toLowerCase();
+        return pn.includes(query) || po.includes(query);
+      });
 
       if (matches.length > 0) {
-        const kontorLista = matches.map(m => m.kontor).join(", ");
+        const kontorLista = [...new Set(matches.map(m => m.kontor))].join(", ");
         document.getElementById('result').textContent = "Kontor: " + kontorLista;
       } else {
         document.getElementById('result').textContent = "Ingen träff hittades.";
