@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sök i CSV från GitHub</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 2em;
+        }
+        #search-container {
+            margin-top: 1em;
+        }
+        #results {
+            margin-top: 1em;
+            font-weight: bold;
+        }
+        #loading-message {
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Sök efter kontor</h1>
+    <p id="loading-message">Laddar data från GitHub...</p>
+
+    <div id="search-container" style="display: none;">
+        <h2>Sök</h2>
+        <input type="text" id="search-input" placeholder="Ange postnummer eller ort...">
+        <button id="search-button">Sök</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.3.0/papaparse.min.js"></script>
+    <script>
+        // *** KLISTRA IN DIN "RAW" GITHUB-LÄNK HÄR ***
+        const csvFileUrl = 'https://raw.githubusercontent.com/DITT_ANVÄNDARNAMN/DITT_REPO/main/DIN_FIL.csv';
+
+        const searchContainer = document.getElementById('search-container');
+        const searchInput = document.getElementById('search-input');
+        const searchButton = document.getElementById('search-button');
+        const resultsDiv = document.getElementById('results');
+        const loadingMessage = document.getElementById('loading-message');
+
+        let csvData = [];
+
+        // Hämta och parsa CSV-filen från GitHub när sidan laddas
+        window.addEventListener('DOMContentLoaded', () => {
+            Papa.parse(csvFileUrl, {
+                download: true, // Viktigt för att hämta från URL
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    csvData = results.data;
+                    searchContainer.style.display = 'block'; // Visa sökfältet
+                    loadingMessage.style.display = 'none'; // Dölj laddningsmeddelandet
+                    console.log("Data har laddats och parsats.", csvData);
+                },
+                error: function(err, file) {
+                    loadingMessage.textContent = 'Kunde inte ladda CSV-filen. Kontrollera att länken är korrekt och pekar till den råa filen ("Raw").';
+                    console.error("Fel vid hämtning av CSV:", err);
+                }
+            });
+        });
+
+
+        function performSearch() {
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            if (searchTerm === '') {
+                resultsDiv.innerHTML = 'Vänligen ange ett postnummer eller en ort.';
+                return;
+            }
+
+            const searchResult = csvData.find(row => {
+                const postnummer = row['Postnummer'] ? String(row['Postnummer']).toLowerCase() : '';
+                const postort = row['Postort'] ? String(row['Postort']).toLowerCase() : '';
+                return postnummer === searchTerm || postort === searchTerm;
+            });
+
+            if (searchResult) {
+                resultsDiv.innerHTML = `Kontor: ${searchResult['Kontor']}`;
+            } else {
+                resultsDiv.innerHTML = 'Inget kontor hittades för angivet postnummer eller ort.';
+            }
+        }
+
+        searchButton.addEventListener('click', performSearch);
+
+        searchInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        });
+    </script>
+
+</body>
+</html>
