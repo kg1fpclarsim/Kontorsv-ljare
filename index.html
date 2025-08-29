@@ -1,141 +1,75 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-    <meta charset="UTF--8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sök i CSV från GitHub</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            margin: 2em;
-            background-color: #f4f4f9;
-            color: #333;
-        }
-        main {
-            max-width: 600px;
-            margin: 0 auto;
-            background: #fff;
-            padding: 2em;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #2c3e50;
-        }
-        #search-container input {
-            width: calc(100% - 80px);
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 1em;
-        }
-        #search-container button {
-            width: 70px;
-            padding: 10px;
-            border: none;
-            background-color: #3498db;
-            color: white;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-        }
-        #search-container button:hover {
-            background-color: #2980b9;
-        }
-        #results {
-            margin-top: 1.5em;
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        #loading-message {
-            color: #555;
-            font-style: italic;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Sök kontor</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    input, button { padding: 8px; margin: 5px; }
+    #result { margin-top: 15px; font-weight: bold; }
+  </style>
 </head>
 <body>
+  <h1>Sök kontor via Postnummer eller Postort</h1>
 
-    <main>
-        <h1>Sök efter kontor</h1>
-        <p id="loading-message">Laddar data från GitHub...</p>
+  <!-- Sökruta -->
+  <input type="text" id="searchInput" placeholder="Ange postnummer eller ort">
+  <button onclick="search()">Sök</button>
 
-        <div id="search-container" style="display: none;">
-            <label for="search-input" style="display: block; margin-bottom: 0.5em;">Sök på postnummer eller postort:</label>
-            <input type="text" id="search-input" placeholder="T.ex. 12345 eller Stockholm">
-            <button id="search-button">Sök</button>
-        </div>
+  <!-- Resultat -->
+  <div id="result">CSV laddas in...</div>
 
-        <div id="results"></div>
-    </main>
+  <script>
+    let csvData = [];
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.3.0/papaparse.min.js"></script>
-    
-    <script>
-        // *** ERSÄTT DENNA LÄNK med den "RAW"-länk som pekar till din CSV-fil på GitHub ***
-        const csvFileUrl = 'Schenker kontor.csv';
+    // HÄR anger du länken till din CSV på GitHub (raw-format!)
+    const csvUrl = "https://raw.githubusercontent.com/<DITT_GITHUB_ANVÄNDARNAMN>/<DITT_REPO>/main/Schenker%20kontor.csv";
 
-        // Hämta HTML-elementen vi ska jobba med
-        const searchContainer = document.getElementById('search-container');
-        const searchInput = document.getElementById('search-input');
-        const searchButton = document.getElementById('search-button');
-        const resultsDiv = document.getElementById('results');
-        const loadingMessage = document.getElementById('loading-message');
+    // Hämta CSV från GitHub
+    fetch(csvUrl)
+      .then(response => response.text())
+      .then(text => parseCSV(text))
+      .catch(err => {
+        document.getElementById('result').textContent = "Fel vid laddning av CSV: " + err;
+      });
 
-        let csvData = [];
+    // Enkel CSV-parser
+    function parseCSV(text) {
+      const rows = text.split(/\r?\n/).map(r => r.split(";"));
+      const headers = rows[0];
+      const postnummerIndex = headers.indexOf("Postnummer");
+      const postortIndex = headers.indexOf("Postort");
+      const kontorIndex = headers.indexOf("Kontor");
 
-        // Kör denna funktion när sidan har laddats klart
-        document.addEventListener('DOMContentLoaded', () => {
-            Papa.parse(csvFileUrl, {
-                download: true,       // Viktigt: säger åt PapaParse att ladda ner filen från URL:en
-                header: true,         // Använd första raden i CSV-filen som rubriker
-                skipEmptyLines: true, // Hoppa över tomma rader
-                complete: (results) => {
-                    csvData = results.data;
-                    searchContainer.style.display = 'block'; // Visa sökfältet
-                    loadingMessage.style.display = 'none';   // Dölj "Laddar data..."
-                    console.log("Data har laddats och är redo.");
-                },
-                error: (err) => {
-                    loadingMessage.textContent = 'Kunde inte ladda CSV-filen. Kontrollera att länken är korrekt och att ditt repository är publikt.';
-                    console.error("Fel vid hämtning av CSV:", err);
-                }
-            });
-        });
+      csvData = rows.slice(1).map(row => ({
+        postnummer: row[postnummerIndex],
+        postort: row[postortIndex],
+        kontor: row[kontorIndex]
+      }));
 
-        // Funktion för att utföra sökningen
-        function performSearch() {
-            const searchTerm = searchInput.value.trim().toLowerCase();
-            
-            if (searchTerm === '') {
-                resultsDiv.innerHTML = 'Vänligen ange ett postnummer eller en ort.';
-                return;
-            }
+      document.getElementById('result').textContent = "CSV laddad. Ange postnummer eller ort ovan.";
+    }
 
-            // Leta igenom datan efter en matchning
-            const searchResult = csvData.find(row => {
-                const postnummer = String(row['Postnummer'] || '').toLowerCase();
-                const postort = String(row['Postort'] || '').toLowerCase();
-                return postnummer === searchTerm || postort === searchTerm;
-            });
+    // Söker i data
+    function search() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      if (!query) {
+        document.getElementById('result').textContent = "Ange ett postnummer eller ort.";
+        return;
+      }
 
-            // Visa resultatet
-            if (searchResult) {
-                resultsDiv.innerHTML = `Kontor: ${searchResult['Kontor']}`;
-            } else {
-                resultsDiv.innerHTML = 'Inget kontor hittades för angivet postnummer eller ort.';
-            }
-        }
+      const matches = csvData.filter(row =>
+        (row.postnummer && row.postnummer.toLowerCase() === query) ||
+        (row.postort && row.postort.toLowerCase() === query)
+      );
 
-        // Koppla händelselyssnare till knappen och sökfältet
-        searchButton.addEventListener('click', performSearch);
-        searchInput.addEventListener('keyup', (event) => {
-            if (event.key === 'Enter') {
-                performSearch();
-            }
-        });
-    </script>
-
+      if (matches.length > 0) {
+        const kontorLista = matches.map(m => m.kontor).join(", ");
+        document.getElementById('result').textContent = "Kontor: " + kontorLista;
+      } else {
+        document.getElementById('result').textContent = "Ingen träff hittades.";
+      }
+    }
+  </script>
 </body>
 </html>
