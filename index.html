@@ -1,78 +1,219 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-  <meta charset="UTF-8">
-  <title>Sök kontor</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sök kontor — mimika XLETAUPP</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    input, button { padding: 8px; margin: 5px; }
-    #result { margin-top: 15px; font-weight: bold; }
+    body{font-family:Arial,Helvetica,sans-serif;margin:18px}
+    input,button{padding:8px;margin:6px 4px}
+    #result{margin-top:12px;font-weight:700}
+    #debug{margin-top:10px;font-family:monospace;background:#f7f7f7;padding:8px;border-radius:6px;white-space:pre-wrap}
+    label{display:block;margin-top:8px}
   </style>
 </head>
 <body>
-  <h1>Sök kontor via Postnummer eller Postort</h1>
+  <h2>Sök kontor — logik som din Excelformel</h2>
+  <p>Funktionalitet: först försöker vi matcha <strong>Postnummer</strong> och returnera <em>Kontorfrk</em>. Om ingen träff - försöker vi matcha <strong>Postort</strong> och returnerar <em>Kontor</em>. (Samma logik som <code>=XLETAUPP(B2;Tabell1[Postnummer];Tabell1[Kontorfrk];XLETAUPP(Blad5!B2;Tabell1[Postort];Tabell1[Kontor]))</code>.)</p>
 
-  <!-- Sökruta -->
-  <input type="text" id="searchInput" placeholder="Ange postnummer eller ort">
-  <button onclick="search()">Sök</button>
+  <label>CSV (raw GitHub-länk):
+    <input type="text" id="csvUrl" style="width:90%" placeholder="Klistra in raw URL till 'Schenker kontor.csv' från GitHub här">
+  </label>
 
-  <!-- Resultat -->
-  <div id="result">CSV laddas in...</div>
+  <label>Postnummer (motsvarar B2):
+    <input id="postnrInput" placeholder="t.ex. 12345 eller 123 45">
+  </label>
+
+  <label>Postort (motsvarar Blad5!B2):
+    <input id="postortInput" placeholder="t.ex. Stockholm">
+  </label>
+
+  <button id="loadBtn">Ladda CSV</button>
+  <button id="searchBtn" disabled>Sök (motsvarar XLETAUPP)</button>
+
+  <div id="result">Inget data laddat ännu.</div>
+  <div id="debug" aria-live="polite"></div>
 
   <script>
-    let csvData = [];
-
-    // HÄR: byt till din riktiga raw-länk från GitHub
-    const csvUrl = "https://raw.githubusercontent.com/<DITT_GITHUB_ANVÄNDARNAMN>/<DITT_REPO>/main/Schenker%20kontor.csv";
-
-    // Hämta CSV från GitHub
-    fetch(csvUrl)
-      .then(response => response.text())
-      .then(text => parseCSV(text))
-      .catch(err => {
-        document.getElementById('result').textContent = "Fel vid laddning av CSV: " + err;
-      });
-
-    // Parser som klarar både ; och ,
-    function parseCSV(text) {
-      const delimiter = text.includes(";") ? ";" : ",";
-      const rows = text.split(/\r?\n/).map(r => r.split(delimiter));
-      const headers = rows[0].map(h => h.trim());
-      const postnummerIndex = headers.indexOf("Postnummer");
-      const postortIndex = headers.indexOf("Postort");
-      const kontorIndex = headers.indexOf("Kontor");
-
-      csvData = rows.slice(1).map(row => ({
-        postnummer: row[postnummerIndex] ? row[postnummerIndex].trim() : "",
-        postort: row[postortIndex] ? row[postortIndex].trim() : "",
-        kontor: row[kontorIndex] ? row[kontorIndex].trim() : ""
-      }));
-
-      document.getElementById('result').textContent = "CSV laddad. Ange postnummer eller ort ovan.";
+    // --------------------
+    // Hjälpfunktioner
+    // --------------------
+    function detectDelimiter(text){
+      if (text.indexOf(';') !== -1) return ';';
+      if (text.indexOf(',') !== -1) return ',';
+      if (text.indexOf('\t') !== -1) return '\t';
+      return ',';
     }
 
-    // Söker i data (tillåter delsträngar och ignorerar mellanslag i postnummer)
-    function search() {
-      const query = document.getElementById('searchInput').value.trim().toLowerCase().replace(/\s+/g, "");
+    // Enkel, men robust split som hanterar citattecken och escaped quotes
+    function splitCSVLine(line, delimiter){
+      const out = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++){
+        const ch = line[i];
+        if (ch === '"'){
+          if (inQuotes && line[i+1] === '"') { cur += '"'; i++; continue; } // escaped quote
+          inQuotes = !inQuotes;
+          continue;
+        }
+        if (ch === delimiter && !inQuotes){
+          out.push(cur);
+          cur = '';
+        } else {
+          cur += ch;
+        }
+      }
+      out.push(cur);
+      return out.map(s => s === undefined ? '' : s);
+    }
 
-      if (!query) {
-        document.getElementById('result').textContent = "Ange ett postnummer eller ort.";
+    function normalizeHeader(h){
+      if (!h) return '';
+      // trim, lower, remove spaces and non-alphanum except åäö
+      return h.toString().trim().toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9åäö]/g,'');
+    }
+
+    function findHeaderIndex(headers, candidates){
+      for (let i = 0; i < headers.length; i++){
+        const nh = normalizeHeader(headers[i]);
+        for (const c of candidates){
+          if (nh === normalizeHeader(c)) return i;
+        }
+      }
+      return -1;
+    }
+
+    // --------------------
+    // CSV-laddning och indexering
+    // --------------------
+    let table = []; // array av rader som objekt
+    let rawHeaders = [];
+    let indices = {};
+
+    document.getElementById('loadBtn').addEventListener('click', () => {
+      const url = document.getElementById('csvUrl').value.trim();
+      if (!url){ alert('Klistra in raw-GitHub-länken till din Schenker kontor.csv först.'); return; }
+      document.getElementById('result').textContent = 'Laddar CSV...';
+      fetch(url).then(r => {
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return r.text();
+      }).then(text => {
+        parseAndIndexCSV(text);
+        document.getElementById('searchBtn').disabled = false;
+        document.getElementById('result').textContent = 'CSV laddad. Klicka Sök.';
+      }).catch(err => {
+        document.getElementById('result').textContent = 'Fel vid inläsning: ' + err;
+        document.getElementById('debug').textContent = '';
+      });
+    });
+
+    function parseAndIndexCSV(text){
+      // ta bort BOM om den finns
+      text = text.replace(/^\uFEFF/, '');
+      const delimiter = detectDelimiter(text);
+      const lines = text.split(/\r?\n/); // behåll tomma rader, men vi filtrerar senare
+      // hitta första icke-tomma rad som header
+      let headerLineIndex = 0;
+      while (headerLineIndex < lines.length && lines[headerLineIndex].trim() === '') headerLineIndex++;
+      const headers = splitCSVLine(lines[headerLineIndex], delimiter).map(h => h.trim());
+      rawHeaders = headers.slice();
+
+      // tänkbara namn för kolumner (översättningar/variationer)
+      const postnummerNames = ['Postnummer','Postnr','Postnr.','Postkod','Postnummer '];
+      const postortNames = ['Postort','Ort'];
+      const kontorNames = ['Kontor','Kontoret'];
+      const kontorFrkNames = ['Kontorfrk','Kontorfrk.','Kontorsförkortning','Kontorsforkortning','Kontorfrk ','Kontorsfork'];
+
+      indices.postnummer = findHeaderIndex(headers, postnummerNames);
+      indices.postort = findHeaderIndex(headers, postortNames);
+      indices.kontor = findHeaderIndex(headers, kontorNames);
+      indices.kontorfrk = findHeaderIndex(headers, kontorFrkNames);
+
+      // bygg tabell (från rad efter header)
+      table = [];
+      for (let i = headerLineIndex + 1; i < lines.length; i++){
+        if (lines[i].trim() === '') continue;
+        const cols = splitCSVLine(lines[i], delimiter);
+        const obj = {};
+        for (let c = 0; c < headers.length; c++){
+          obj[normalizeHeader(headers[c] || ('col'+c))] = (cols[c] || '').trim();
+        }
+        table.push(obj);
+      }
+
+      // Debugoutput
+      const dbg = [];
+      dbg.push('Upptäckta headers: ' + rawHeaders.join(' | '));
+      dbg.push('Index: postnummer=' + indices.postnummer + ', postort=' + indices.postort + ', kontor=' + indices.kontor + ', kontorfrk=' + indices.kontorfrk);
+      dbg.push('Rader lästa: ' + table.length);
+      dbg.push('\nExempel (första 5 rader):');
+      table.slice(0,5).forEach((r, idx) => dbg.push((idx+1) + '  ' + JSON.stringify(r)));
+      document.getElementById('debug').textContent = dbg.join('\n');
+    }
+
+    // --------------------
+    // Söklogik — efterliknar din XLETAUPP-formel
+    // --------------------
+    function normalizePostnummer(p){ return (p||'').toString().replace(/\s+/g,''); }
+    function normalizeText(t){ return (t||'').toString().trim().toLowerCase(); }
+
+    function xLookupPostnummer(postnr){
+      if (indices.postnummer === -1 || indices.kontor === -1) return null;
+      const key = normalizePostnummer(postnr);
+      const postnummerHdr = normalizeHeader(rawHeaders[indices.postnummer]);
+      const kontorHdr = normalizeHeader(rawHeaders[indices.kontor]);
+      for (let i = 0; i < table.length; i++){
+        const val = normalizePostnummer(table[i][postnummerHdr]);
+        if (val === key && val !== ''){
+          return table[i][kontorHdr] || null;
+        }
+      }
+      return null;
+    }
+
+    function xLookupPostort(postort){
+      if (indices.postort === -1 || indices.kontor === -1) return null;
+      const key = normalizeText(postort);
+      const postortHdr = normalizeHeader(rawHeaders[indices.postort]);
+      const kontorHdr = normalizeHeader(rawHeaders[indices.kontor]);
+      for (let i = 0; i < table.length; i++){
+        const val = normalizeText(table[i][postortHdr]);
+        if (val === key && val !== ''){
+          return table[i][kontorHdr] || null;
+        }
+      }
+      return null;
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', () => {
+      const postnr = document.getElementById('postnrInput').value;
+      const postort = document.getElementById('postortInput').value;
+      document.getElementById('result').textContent = 'Söker...';
+
+      // 1) försök postnummer -> Kontorfrk
+      const res1 = xLookupPostnummer(postnr);
+      if (res1){
+        document.getElementById('result').textContent = 'Resultat (Postnummer → Kontorfrk): ' + res1;
         return;
       }
 
-      const matches = csvData.filter(row => {
-        const pn = row.postnummer.toLowerCase().replace(/\s+/g, "");
-        const po = row.postort.toLowerCase();
-        return pn.includes(query) || po.includes(query);
-      });
-
-      if (matches.length > 0) {
-        const kontorLista = [...new Set(matches.map(m => m.kontor))].join(", ");
-        document.getElementById('result').textContent = "Kontor: " + kontorLista;
-      } else {
-        document.getElementById('result').textContent = "Ingen träff hittades.";
+      // 2) fallback: postort -> Kontor
+      const res2 = xLookupPostort(postort);
+      if (res2){
+        document.getElementById('result').textContent = 'Resultat (Postort → Kontor): ' + res2;
+        return;
       }
-    }
+
+      document.getElementById('result').textContent = 'Ingen träff hittades (försökte Postnummer → Kontorfrk och Postort → Kontor).';
+    });
+
+    // --------------------
+    // Tips: tryck Enter i input för att trigga sök
+    // --------------------
+    [document.getElementById('postnrInput'), document.getElementById('postortInput')].forEach(el => {
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { if (!document.getElementById('searchBtn').disabled) document.getElementById('searchBtn').click(); } });
+    });
   </script>
 </body>
 </html>
