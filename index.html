@@ -117,18 +117,7 @@
         state.idx = idx;
 
         // Debugvisning
-        dbgEl.textContent = `Kolumner: ${headers.join(' | ')}  |  index: pn=${idx.postnummer}, ort=${idx.postort}, kontor=${idx.kontor}  |  rader: ${rows.length}`;
-
-        if (rows.length === 0){ resEl.textContent = 'CSV laddad men 0 rader hittades.'; }
-        else if (idx.postnummer === -1 || idx.postort === -1 || idx.kontor === -1){
-          resEl.textContent = 'Kunde inte hitta nödvändiga kolumner (Postnummer, Postort, Kontor). Kontrollera headerrad i CSV.';
-        } else {
-          resEl.textContent = '';
-        }
-      } catch(err){
-        document.getElementById('result').textContent = 'Fel vid hämtning av CSV: ' + err.message + '. Om sidan öppnas som en lokal fil kan webbläsaren blockera hämtning – prova att hosta sidan (t.ex. GitHub Pages).';
-      }
-    }
+    
 
     // --- Söklogik (Excel: Postnummer -> Kontor, annars Postort -> Kontor; med snäll fallback på delsträng för ort) ---
     function lookup(q){
