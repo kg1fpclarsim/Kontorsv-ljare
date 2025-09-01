@@ -11,7 +11,6 @@
       display:flex;
       flex-direction:column;
       align-items:center;
-      justify-content:flex-start;
       min-height:100vh;
       margin:0;
       padding:20px;
@@ -23,7 +22,6 @@
     }
     .search-container {
       display:flex;
-      flex-direction:row;
       flex-wrap:wrap;
       gap:10px;
       justify-content:center;
@@ -48,15 +46,20 @@
       cursor:pointer;
       flex-shrink:0;
     }
-    #searchBtn:active {
-      background:#005bb5;
-    }
+    #searchBtn:active { background:#005bb5; }
     #result {
       margin-top:30px;
       font-size:18px;
       font-weight:bold;
       text-align:center;
       word-wrap:break-word;
+      max-width:400px;
+    }
+    #debug {
+      margin-top:15px;
+      font-size:12px;
+      color:#666;
+      text-align:center;
       max-width:400px;
     }
   </style>
@@ -68,9 +71,10 @@
     <button id="searchBtn">Sök</button>
   </div>
   <div id="result"></div>
+  <div id="debug"></div> <!-- Debug info -->
 
   <script>
-    const csvUrl = "https://raw.githubusercontent.com/kg1fpclarsim/Kontorsv-ljare/refs/heads/main/Schenker%20kontor.csv"; // <-- byt till din riktiga raw-länk
+    const csvUrl = "https://raw.githubusercontent.com/kg1fpclarsim/Kontorsv-ljare/refs/heads/main/Schenker%20kontor.csv"; // <-- byt till din raw-länk
     let table = [];
     let rawHeaders = [];
     let indices = {};
@@ -129,7 +133,7 @@
 
       indices.postnummer = findHeaderIndex(headers, ['Postnummer','Postnr']);
       indices.postort = findHeaderIndex(headers, ['Postort','Ort']);
-      indices.kontor = findHeaderIndex(headers, ['Kontor']);
+      indices.kontor = findHeaderIndex(headers, ['Kontor','Kontorsförkortning']);
 
       table = [];
       for (let i = headerLineIndex + 1; i < lines.length; i++){
@@ -141,6 +145,13 @@
         }
         table.push(obj);
       }
+
+      // debug info
+      document.getElementById('debug').textContent =
+        "Hittade headers: " + JSON.stringify(headers) +
+        " | postnummerIndex=" + indices.postnummer +
+        " | postortIndex=" + indices.postort +
+        " | kontorIndex=" + indices.kontor;
     }
 
     function searchKontor(input){
@@ -149,12 +160,14 @@
       const postortHdr = normalizeHeader(rawHeaders[indices.postort]);
       const kontorHdr = normalizeHeader(rawHeaders[indices.kontor]);
 
+      // försök med postnummer
       const pn = normalizePostnummer(input);
       for (let r of table){
         if (normalizePostnummer(r[postnummerHdr]) === pn){
           return r[kontorHdr];
         }
       }
+      // annars försök med ort
       const ort = normalizeText(input);
       for (let r of table){
         if (normalizeText(r[postortHdr]) === ort){
