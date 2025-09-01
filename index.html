@@ -1,33 +1,35 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sök kontor</title>
-<style>
-:root { --bg:#f9f9f9; --fg:#111; --muted:#6b7280; --brand:#1e90ff; --brand-dark:#1874cc; }
-body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, Helvetica, sans-serif; background:var(--bg); color:var(--fg); margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; }
-.card { width:min(92vw, 560px); background:#fff; border-radius:16px; box-shadow:0 6px 18px rgba(0,0,0,.08); padding:20px; }
-h1 { font-size:20px; margin:4px 0 16px; text-align:center; }
-.row { display:flex; gap:10px; }
-@media (max-width: 480px){ .row { flex-direction:column; } }
-input[type="text"] { flex:1; padding:14px 12px; font-size:16px; border:1px solid #e5e7eb; border-radius:12px; outline:none; }
-input[type="text"]:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(30,144,255,.15); }
-button { padding:14px 18px; font-size:16px; border:0; border-radius:12px; background:var(--brand); color:#fff; cursor:pointer; }
-button:active { background:var(--brand-dark); }
-#result { margin-top:16px; font-size:18px; font-weight:600; text-align:center; word-wrap:break-word; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sök kontor</title>
+  <style>
+    body {font-family: Arial, sans-serif; margin: 20px;}
+    h2 {margin-bottom: 15px;}
+    .search-container {display: flex; flex-wrap: wrap; gap: 10px;}
+    input {flex: 1; min-width: 200px; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 6px;}
+    button {padding: 10px 16px; font-size: 16px; border: none; border-radius: 6px; background: #0073e6; color: white; cursor: pointer;}
+    button:hover {background: #005bb5;}
+    #result {margin-top: 20px; font-weight: bold; font-size: 18px;}
+    @media (max-width: 480px) {
+      body {margin: 10px;}
+      h2 {font-size: 20px;}
+      input, button {font-size: 14px; padding: 8px;}
+      #result {font-size: 16px;}
+    }
+  </style>
 </head>
 <body>
-<h1>Sök kontor</h1>
-<div>
-<input id="searchBox" placeholder="Ange postnummer eller ort">
-<button id="searchBtn">Sök</button>
-</div>
-<div id="result"></div>
+  <h2>Sök kontor</h2>
+  <div class="search-container">
+    <input type="text" id="searchBox" placeholder="Ange postnummer eller ort">
+    <button id="searchBtn">Sök</button>
+  </div>
+  <div id="result"></div>
 
   <script>
-    const csvUrl = "https://raw.githubusercontent.com/kg1fpclarsim/Kontorsv-ljare/refs/heads/main/Schenker%20kontor.csv"; // <-- ändra till rätt raw-länk
+    const csvUrl = "https://raw.githubusercontent.com/DITT_GITHUB_REPO/main/Schenker%20kontor.csv"; // <-- ändra till rätt raw-länk
     let table = [];
     let rawHeaders = [];
     let indices = {};
